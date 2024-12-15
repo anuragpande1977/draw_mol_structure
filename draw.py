@@ -1,5 +1,6 @@
 import requests
-import streamlit as st
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
 def get_pubchem_cid(chemical_name):
     """
@@ -25,46 +26,48 @@ def get_smiles(cid):
             return data["PropertyTable"]["Properties"][0]["CanonicalSMILES"]
     return None
 
-def get_mol2(cid):
+def smiles_to_mol2(smiles):
     """
-    Fetch the MOL2 file for a given CID.
+    Converts a SMILES string to MOL2 format.
     """
-    url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/record/MOL2"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.text
-    return None
-
-# Streamlit App
-def main():
-    st.title("PubChem Chemical Structure Finder")
-    st.write("Enter the name of a chemical to fetch its SMILES and MOL2 file from PubChem.")
-
-    # Input: Chemical Name
-    chemical_name = st.text_input("Enter Chemical Name", placeholder="e.g., Aspirin")
-
-    if chemical_name:
-        st.write(f"Searching for: **{chemical_name}**")
+    try:
+        # Generate molecule object from SMILES
+        mol = Chem.MolFromSmiles(smiles)
+        if not mol:
+            raise ValueError("Invalid SMILES string.")
         
-        # Step 1: Get CID
-        cid = get_pubchem_cid(chemical_name)
-        if cid:
-            st.success(f"Chemical found! PubChem CID: **{cid}**")
-            
-            # Step 2: Get SMILES
-            smiles = get_smiles(cid)
-            if smiles:
-                st.write(f"**SMILES**: `{smiles}`")
-                st.download_button("Download SMILES", smiles, file_name=f"{chemical_name}_smiles.txt", mime="text/plain")
+        # Add hydrogens and generate 3D coordinates
+        mol = Chem.AddHs(mol)
+        AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+        
+        # Export to MOL2 format
+        mol2_data = Chem.MolToMol2Block(mol)
+        return mol2_data
+    except Exception as e:
+        print(f"Error converting SMILES to MOL2: {e}")
+        return None
 
-            # Step 3: Get MOL2
-            mol2_data = get_mol2(cid)
-            if mol2_data:
-                st.download_button("Download MOL2 File", mol2_data, file_name=f"{chemical_name}.mol2", mime="chemical/x-mol2")
-            else:
-                st.warning("MOL2 format not available for this compound.")
-        else:
-            st.error("Chemical not found in PubChem database.")
-
+# Example Usage
 if __name__ == "__main__":
-    main()
+    chemical_name = input("Enter the name of the chemical: ")
+    
+    # Step 1: Fetch CID
+    cid = get_pubchem_cid(chemical_name)
+    if not cid:
+        print(f"Chemical '{chemical_name}' not found in PubChem.")
+    else:
+        print(f"PubChem CID: {cid}")
+        
+        # Step 2: Fetch SMILES
+        smiles = get_smiles(cid)
+        if not smiles:
+            print(f"SMILES not found for CID {cid}.")
+        else:
+            print(f"SMILES: {smiles}")
+            
+            # Step 3: Convert SMILES to MOL2
+            mol2_data = smiles_to_mol2(smiles)
+            if mol2_data:
+                with open(f"{chemical_name}.mol2", "w") as file:
+                    file.write(mol2_data)
+                print(f"MOL2 file created: {chemical_name}.mol2")
