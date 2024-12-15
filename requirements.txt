@@ -1,3 +1,2 @@
 streamlit==1.26.0
 Pillow==9.4.0
-chemlib==1.0.2
